@@ -16,12 +16,12 @@
    See README.md for the full step-by-step walkthrough.
    ========================================================================= */
 const FIREBASE_CONFIG = {
-  apiKey: "REPLACE_ME",
-  authDomain: "REPLACE_ME",
-  projectId: "REPLACE_ME",
-  storageBucket: "REPLACE_ME",
-  messagingSenderId: "REPLACE_ME",
-  appId: "REPLACE_ME",
+  apiKey: "AIzaSyC2H-mstLwUyLLJqfpIUgqXQYcUF-9-YWk",
+  authDomain: "marketing-support-a6bfa.firebaseapp.com",
+  projectId: "marketing-support-a6bfa",
+  storageBucket: "marketing-support-a6bfa.firebasestorage.app",
+  messagingSenderId: "571953621058",
+  appId: "1:571953621058:web:b5f7f688e945fe089d25db",
 };
 
 function isFirebaseConfigured(){
