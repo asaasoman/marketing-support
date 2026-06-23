@@ -282,10 +282,7 @@ tbody tr:last-child td{border-bottom:none;}
 <div class="overlay" id="loginOverlay" hidden>
   <div class="modal-box">
     <h3>دخول لوحة التحكم</h3>
-    <p>هذه اللوحة مخصصة لفريق التواصل المؤسسي والتسويق. سجّل الدخول بالحساب الذي أنشأتموه في Firebase Authentication.</p>
-    <div class="field" style="margin-bottom:10px;">
-      <input type="email" id="loginEmail" placeholder="البريد الإلكتروني" dir="ltr">
-    </div>
+    <p>أدخل كلمة المرور الخاصة بفريق التواصل المؤسسي والتسويق.</p>
     <div class="field">
       <input type="password" id="loginPassword" placeholder="كلمة المرور" dir="ltr">
     </div>
@@ -330,6 +327,12 @@ const FIREBASE_CONFIG = {
 function isFirebaseConfigured(){
   return Object.values(FIREBASE_CONFIG).every(v => v && !String(v).includes("REPLACE_ME"));
 }
+
+/* The admin dashboard login only asks for a password (no email field shown).
+   Behind the scenes it signs in with this fixed Firebase Authentication
+   account — set/replace its password in Firebase Console → Authentication →
+   Users to whatever passcode you want the team to use. */
+const ADMIN_EMAIL = "asaasoman98@gmail.com";
 
 let app, db, auth;
 let firestoreApi = null; // populated once the Firestore module is loaded
@@ -628,9 +631,9 @@ function showSuccess(def, reference){
 
 /* ============== ADMIN DASHBOARD (Firebase Auth + Firestore) ============== */
 const loginOverlay = document.getElementById("loginOverlay");
-const loginEmail = document.getElementById("loginEmail");
 const loginPassword = document.getElementById("loginPassword");
 const loginError = document.getElementById("loginError");
+let currentUser = null;
 
 document.getElementById("adminLinkBtn").addEventListener("click", async ()=>{
   if(!isFirebaseConfigured()){
@@ -638,11 +641,14 @@ document.getElementById("adminLinkBtn").addEventListener("click", async ()=>{
     return;
   }
   await initFirebase();
-  loginEmail.value = "";
+  if(currentUser){
+    renderDashboard();
+    return;
+  }
   loginPassword.value = "";
   loginError.style.display = "none";
   loginOverlay.hidden = false;
-  loginEmail.focus();
+  loginPassword.focus();
 });
 document.getElementById("loginCancel").addEventListener("click", ()=>{ loginOverlay.hidden = true; });
 document.getElementById("loginSubmit").addEventListener("click", doLogin);
@@ -651,12 +657,12 @@ loginPassword.addEventListener("keydown", (e)=>{ if(e.key === "Enter") doLogin()
 async function doLogin(){
   loginError.style.display = "none";
   try{
-    await authApi.signInWithEmailAndPassword(auth, loginEmail.value.trim(), loginPassword.value);
+    await authApi.signInWithEmailAndPassword(auth, ADMIN_EMAIL, loginPassword.value);
     loginOverlay.hidden = true;
     renderDashboard();
   }catch(err){
     console.error("Auth error:", err);
-    loginError.textContent = "تعذّر تسجيل الدخول. تحقّق من البريد وكلمة المرور.";
+    loginError.textContent = "كلمة المرور غير صحيحة.";
     loginError.style.display = "block";
   }
 }
@@ -688,7 +694,7 @@ async function renderDashboard(){
   `;
   document.getElementById("logoutBtn").addEventListener("click", async ()=>{
     await authApi.signOut(auth);
-    backToForm();
+    // onAuthStateChanged (registered in init()) switches the view back to the public form automatically
   });
   document.getElementById("closeDashBtn").addEventListener("click", backToForm);
   document.querySelectorAll(".subnav-btn").forEach(btn=>{
@@ -973,6 +979,19 @@ async function saveContent(){
   applyContent();
   renderTypeSelector();
   renderForm();
+
+  if(isFirebaseConfigured()){
+    await initFirebase();
+    authApi.onAuthStateChanged(auth, (user)=>{
+      const wasSignedIn = !!currentUser;
+      currentUser = user;
+      if(user){
+        renderDashboard();
+      } else if(wasSignedIn){
+        backToForm();
+      }
+    });
+  }
 })();
 
 </script>
