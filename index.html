@@ -361,56 +361,18 @@ function isFirebaseConfigured(){
    Users to whatever passcode you want the team to use. */
 const ADMIN_EMAIL = "asaasoman98@gmail.com";
 
-let app, db, auth, storage;
+let app, db, auth;
 let firestoreApi = null; // populated once the Firestore module is loaded
 let authApi = null;      // populated once the Auth module is loaded
-let storageApi = null;   // populated once the Storage module is loaded
 
 async function initFirebase(){
   if(!isFirebaseConfigured() || app) return;
   const { initializeApp } = await import("https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js");
   firestoreApi = await import("https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js");
   authApi = await import("https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js");
-  storageApi = await import("https://www.gstatic.com/firebasejs/12.15.0/firebase-storage.js");
   app = initializeApp(FIREBASE_CONFIG);
   db = firestoreApi.getFirestore(app);
   auth = authApi.getAuth(app);
-  storage = storageApi.getStorage(app);
-}
-
-/* ---------- photo helpers (resize client-side, then upload to Firebase Storage) ---------- */
-function compressImage(file, maxDim = 900, quality = 0.8){
-  return new Promise((resolve, reject)=>{
-    const objectUrl = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = ()=>{
-      let { width, height } = img;
-      if(width > height && width > maxDim){
-        height = Math.round(height * (maxDim / width));
-        width = maxDim;
-      } else if(height > maxDim){
-        width = Math.round(width * (maxDim / height));
-        height = maxDim;
-      }
-      const canvas = document.createElement("canvas");
-      canvas.width = width;
-      canvas.height = height;
-      canvas.getContext("2d").drawImage(img, 0, 0, width, height);
-      canvas.toBlob((blob)=>{
-        URL.revokeObjectURL(objectUrl);
-        blob ? resolve(blob) : reject(new Error("Image compression failed"));
-      }, "image/jpeg", quality);
-    };
-    img.onerror = (e)=>{ URL.revokeObjectURL(objectUrl); reject(e); };
-    img.src = objectUrl;
-  });
-}
-
-async function uploadPhoto(blob, reference, fieldId){
-  const path = `request-photos/${reference}-${fieldId}.jpg`;
-  const fileRef = storageApi.ref(storage, path);
-  await storageApi.uploadBytes(fileRef, blob, { contentType: "image/jpeg" });
-  return await storageApi.getDownloadURL(fileRef);
 }
 
 const STATUS_OPTIONS = ["جديد", "قيد التنفيذ", "مكتمل", "مرفوض / يحتاج تعديل"];
@@ -466,9 +428,9 @@ const FORMS = {
       ]},
       {id:"mobile", label:"الهاتف المحمول", required:true, dir:"ltr"},
       {id:"email", label:"البريد الإلكتروني", required:true, dir:"ltr", type:"email"},
-      {id:"photo", label:"صورة شخصية", required:false, dir:"ltr", file:true, accept:"image/*", hint:"صورة شخصية حديثة بخلفية واضحة — تُضغط تلقائياً قبل الإرسال"},
       {id:"notes", label:"ملاحظات إضافية", required:false, dir:"rtl", textarea:true, full:true},
     ],
+    info: "إذا أردت تغيير صورتك الشخصية ارسلها بجودة عالية لـ هناء.",
   },
   email_signature: {
     titleAr: "توقيع البريد الإلكتروني",
@@ -613,19 +575,6 @@ function renderForm(){
     </form>
   `;
   document.getElementById("requestForm").addEventListener("submit", onSubmit);
-
-  fields.filter(f=>f.file).forEach(f=>{
-    const input = document.getElementById(f.id);
-    const preview = document.getElementById(f.id + "_preview");
-    input.addEventListener("change", ()=>{
-      if(input.files && input.files[0]){
-        preview.src = URL.createObjectURL(input.files[0]);
-        preview.hidden = false;
-      } else {
-        preview.hidden = true;
-      }
-    });
-  });
 }
 
 /* ---------- reference number (for the requester to quote in follow-ups) ---------- */
@@ -651,16 +600,8 @@ async function onSubmit(e){
   const errorEl = document.getElementById("formError");
   const data = { type: currentType, typeLabel: def.titleAr };
   let valid = true;
-  const fileFields = [];
 
   fields.forEach(f=>{
-    if(f.file){
-      const el = document.getElementById(f.id);
-      const hasFile = !!(el && el.files && el.files[0]);
-      if(f.required && !hasFile) valid = false;
-      if(hasFile) fileFields.push(f);
-      return;
-    }
     const el = document.getElementById(f.id);
     const val = el ? el.value.trim() : "";
     if(f.required && !val) valid = false;
@@ -689,14 +630,6 @@ async function onSubmit(e){
 
   try{
     await initFirebase();
-
-    for(const f of fileFields){
-      submitBtn.textContent = "جارٍ رفع الصورة...";
-      const el = document.getElementById(f.id);
-      const compressed = await compressImage(el.files[0]);
-      data[f.id] = await uploadPhoto(compressed, reference, f.id);
-    }
-
     submitBtn.textContent = "جارٍ الإرسال...";
     data.submittedAt = firestoreApi.serverTimestamp();
     await firestoreApi.addDoc(firestoreApi.collection(db, "requests"), data);
@@ -705,7 +638,9 @@ async function onSubmit(e){
     console.error("Submission error:", err);
     submitBtn.disabled = false;
     submitBtn.textContent = "إرسال الطلب";
-    errorEl.textContent = "حدث خطأ أثناء إرسال الطلب. تحقّق من اتصالك بالإنترنت وحاول مرة أخرى.";
+    const codePart = err && err.code ? ` (${err.code})` : "";
+    const msgPart  = err && err.message ? ` — ${err.message}` : "";
+    errorEl.textContent = "تعذّر إرسال الطلب" + codePart + msgPart;
     errorEl.style.display = "block";
   }
 }
