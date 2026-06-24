@@ -137,6 +137,28 @@ input,textarea,select,button{font-family:inherit;}
   border:1px solid var(--line); object-fit:cover;
 }
 
+/* ---------- name autocomplete dropdown ---------- */
+.autocomplete-wrap{position:relative;}
+.autocomplete-panel{
+  position:absolute; top:calc(100% + 4px); left:0; right:0;
+  background:#fff; border:1.5px solid var(--line); border-radius:10px;
+  max-height:280px; overflow-y:auto;
+  box-shadow:0 8px 22px rgba(16,31,46,.12);
+  z-index:30;
+}
+.autocomplete-item{
+  padding:9px 12px; cursor:pointer; font-size:13.5px;
+  border-bottom:1px solid var(--line);
+}
+.autocomplete-item:last-child{border-bottom:none;}
+.autocomplete-item:hover,
+.autocomplete-item.active{background:#eef5ff;}
+.autocomplete-item .ac-primary{font-weight:700; color:var(--ink);}
+.autocomplete-item .ac-secondary{
+  font-size:11.5px; color:var(--ink-soft); margin-top:2px;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+
 .info-strip{
   display:flex; align-items:center; gap:10px;
   background:#f1f7ff; border:1px solid #d8e8fb; border-radius:10px;
@@ -383,6 +405,67 @@ const STATUS_CLASS = {
   "مرفوض / يحتاج تعديل": "s-rejected",
 };
 
+/* The seven departments — used as dropdown options for the "القسم / الإدارة" field. */
+const DEPARTMENTS = [
+  "المالية",
+  "التواصل المؤسسي والتسويق",
+  "المشتريات والعقود",
+  "تقنية المعلومات",
+  "الموارد البشرية",
+  "الحوكمة والمخاطر والامتثال",
+  "إدارة المشاريع",
+];
+
+/* Employee roster used to power the name autocomplete. Selecting a suggestion
+   fills name_en, name_ar, title_en, title_ar in one click whenever those
+   fields exist on the current form. */
+const EMPLOYEES = [
+  {nameEn:"Sulaiman Ahmed Saud Al Kindi", nameAr:"سليمان أحمد سعود الكندي", titleEn:"Chief Executive Officer", titleAr:"الرئيس التنفيذي"},
+  {nameEn:"Sara Salim Hamed Al Kamyani", nameAr:"ساره سالم حمد الكميانية", titleEn:"Associate Business Development", titleAr:"مساعد تطوير الأعمال"},
+  {nameEn:"Ahmed Suhail Al Mur Al Habsi", nameAr:"احمد سهيل المر الحابسي", titleEn:"Finance Director", titleAr:"مديرعام المالية"},
+  {nameEn:"Hana Mubarak Hamed Al Mujaini", nameAr:"هناء مبارك حمد المجينية", titleEn:"Senior Specialist Communication & Design", titleAr:"أخصائي أول - الاتصال والتصميم"},
+  {nameEn:"Wafa Ali Rashid Al Jabri", nameAr:"وفاء علي راشد الجابرية", titleEn:"Team Lead – Document and Information Management", titleAr:"قائد فريق - إدارة الوثائق والمعلومات"},
+  {nameEn:"Khadija Mubarak Al Hashmi", nameAr:"خديجه مبارك سالم الهاشمية", titleEn:"Specialist- Strategy & Business Reporting", titleAr:"أخصائي - الإستراتيجية وتقارير الأعمال"},
+  {nameEn:"Ahmed Khamis Nasser Al Fahdi", nameAr:"أحمد خميس ناصر الفهدي", titleEn:"Senior Analyst - Procurement and contract", titleAr:"محلل أول - المشتريات والعقود"},
+  {nameEn:"Marwa Said Abdullah Al Riyami", nameAr:"مروه سعيد عبدالله الريامية", titleEn:"Senior Specialist - IT Networks and Security", titleAr:"أخصائي أول - شبكات وأمن تقنية المعلومات"},
+  {nameEn:"Abdullah Rashid Khamis Al Rasbi", nameAr:"عبدالله راشد خميس الراسبي", titleEn:"Senior Manager- Development Management", titleAr:"مدير أول - إدارة التطوير"},
+  {nameEn:"Al Muataz Mansoor Nasser Al Saqri", nameAr:"المعتز منصور ناصر الصقري", titleEn:"Senior Specialist Communication and Media", titleAr:"أخصائي أول - الاتصال والإعلام"},
+  {nameEn:"Ali Badar Saud Al Jabri", nameAr:"علي بدر سعود الجابري", titleEn:"Administrative Assistant", titleAr:"مساعد إداري"},
+  {nameEn:"Dunya Moosa Obaid Al Salami", nameAr:"دنيا موسى عبيد السلامية", titleEn:"Administrative Assitant", titleAr:"مساعد إداري"},
+  {nameEn:"Musab Badar Mubarak Al Busaidi", nameAr:"مصعب بدر مبارك البوسعيدي", titleEn:"Internal Audit Manager", titleAr:"مدير التدقيق الداخلي"},
+  {nameEn:"Nahla Sulaiman Zahran Al Abdul Salam", nameAr:"نهله سليمان زهران آل عبدالسلام", titleEn:"Team Lead- Retail Leasing", titleAr:"قائد فريق - تأجير التجزئة"},
+  {nameEn:"Bader Saud Harib Al Busaidi", nameAr:"بدر سعود حارب البوسعيدي", titleEn:"Team lead - External Relation & Government communication", titleAr:"رئيس فريق العلاقات الخارجية والتواصل الحكومي"},
+  {nameEn:"Ahmed Abdullah Ahmed Al Harthy", nameAr:"أحمد عبدالله أحمد الحارثي", titleEn:"Manager - Projects Control & Contracts", titleAr:"مدير - ضبط المشاريع والعقود"},
+  {nameEn:"Ali Sulaiman Saif Al Khalili", nameAr:"علي سليمان سيف الخليلي", titleEn:"Senior Manager - Corporate Support", titleAr:"مدير أول - الدعم المؤسسي"},
+  {nameEn:"Wasan Ali Mohammed Al Maamari", nameAr:"وسن علي محمد المعمرية", titleEn:"Assistant Manager - Development Management", titleAr:"مساعد مدير - إدارة التطوير"},
+  {nameEn:"Najwa Abdullah Issa Al Balushi", nameAr:"نجوى عبدالله عيسى البلوشية", titleEn:"Assistant Manager - Design Management", titleAr:"مساعد مدير - إدارة التصميم"},
+  {nameEn:"Ashraf Said Mohammed Al Hajri", nameAr:"اشرف سعيد محمد الحجري", titleEn:"Project Manager-Design", titleAr:"مدير مشروع - التصميم"},
+  {nameEn:"Bader Ali Hashil Al Siyabi", nameAr:"بدر علي هاشل السيابي", titleEn:"Supply Chain Manager", titleAr:"مدير سلسلة الإمداد"},
+  {nameEn:"Mudlij Hamyar Nasser Al Ismaeely", nameAr:"مدلج حمير ناصر الاسماعيلي", titleEn:"Associate Manager- Investment", titleAr:"مساعد مدير - الاستثمار"},
+  {nameEn:"Jaffar Mohammed Hussain Al Lawati", nameAr:"جعفر محمد حسين اللواتي", titleEn:"Team Lead - Strategy & Business Reporting", titleAr:"قائد فريق - الإستراتيجية وتقارير الأعمال"},
+  {nameEn:"Talal Azhar Haroon Al Kindi", nameAr:"طلال أزهر هارون الكندي", titleEn:"Senior Analyst- Asset Management", titleAr:"محلل أول - إدارة الأصول"},
+  {nameEn:"Husam Ahmed Saleh Al Marhoon", nameAr:"حسام أحمد صالح المرهون", titleEn:"Manager - Development", titleAr:"مدير - التطوير"},
+  {nameEn:"Khalil Khamis Hassan Al Balushi", nameAr:"خليل خميس حسن البلوشي", titleEn:"Senior Leasing Administrator", titleAr:"مسؤول تأجير أول"},
+  {nameEn:"Intisar Ali Alazri", nameAr:"انتصار علي أحمد العزرية", titleEn:"Senior Accountant", titleAr:"محاسب أول"},
+  {nameEn:"Manal Juma Sulaiman Al Wahaibi", nameAr:"منال جمعه سليمان الوهيبية", titleEn:"Assistant Accountant", titleAr:"مساعد محاسب"},
+  {nameEn:"Maryam Ahmed Omair Al Habsi", nameAr:"مريم أحمد عمير الحبسية", titleEn:"Executive Assistant", titleAr:"مساعد تنفيذي"},
+  {nameEn:"Mahmood Ahmed Yosouf Al Rawahi", nameAr:"محمود أحمد يوسف الرواحي", titleEn:"Senior Coordinator -Design", titleAr:"منسق أول - التصميم"},
+  {nameEn:"Razan Abdullah Mubarak Al Shanfari", nameAr:"رزان عبدالله مبارك الشنفرية", titleEn:"Senior Specialist-Legal", titleAr:"أخصائي أول - قانوني"},
+  {nameEn:"Mariam Harib Khalfan Al Noutki", nameAr:"مريم حارب خلفان النوتكية", titleEn:"Team Lead - Governance, Risk & Compliance", titleAr:"قائد فريق - الحوكمة والمخاطر والامتثال"},
+  {nameEn:"Alaa Mohammed Hassan Al Shehi", nameAr:"آلاء محمد حسن الشحية", titleEn:"Assistant Manager - Development Management", titleAr:"مساعد مدير - إدارة التطوير"},
+  {nameEn:"Ahmed Hamed Saif Al Rawahi", nameAr:"أحمد حمد سيف الرواحي", titleEn:"Documents Controller", titleAr:"مراقب الوثائق"},
+  {nameEn:"Nouf Sultan Sulaiman Al Busaidi", nameAr:"نوف سلطان سليمان البوسعيدية", titleEn:"Senior Specialist - Learning & Development", titleAr:"أخصائي أول - التعلم والتطوير"},
+  {nameEn:"Mazin Zahir Nasser Al Maskari", nameAr:"مازن زاهر ناصر المسكري", titleEn:"Development Manager", titleAr:"مدير التطوير"},
+  {nameEn:"Abdul Hakeem Abdullah Khalfan Al Kuhaili", nameAr:"عبدالحكيم عبدالله خلفان الكهيلي", titleEn:"Team Lead - Projects Control", titleAr:"قائد فريق - ضبط المشاريع"},
+  {nameEn:"Saud Obaid Ali Al Shidi", nameAr:"سعود عبيد علي الشيدي", titleEn:"Team Lead - HR & Admin", titleAr:"قائد فريق - الموارد البشرية والشؤون الإدارية"},
+  {nameEn:"Khalid Sultan Hamed Al Rawahi", nameAr:"خالد سلطان حمد الرواحي", titleEn:"Senior Analyst - Procurement and contract", titleAr:"محلل أول - المشتريات والعقود"},
+  {nameEn:"Lulwa Mubarak Khamis Al Araimi", nameAr:"لولوه مبارك خميس العريمية", titleEn:"Associate Manager - Investment", titleAr:"مساعد مدير - الاستثمار"},
+  {nameEn:"Shahla Ali Masoud Al Hinai", nameAr:"شهلاء علي مسعود الهنائية", titleEn:"Senior Analyst - Investment", titleAr:"محلل أول - الاستثمار"},
+  {nameEn:"Lujaina Khalil Mohamed Al Sabri", nameAr:"لجينه خليل محمد الصابرية", titleEn:"Strategy & Business Reporting Assistant", titleAr:"مساعد الإستراتيجية وتقارير الأعمال"},
+  {nameEn:"Ahmed Yahya Mohamed Hilal Al Rawahi", nameAr:"أحمد يحيى محمد الرواحي", titleEn:"Senior Specialist - Administration", titleAr:"أخصائي اول - الإدارة"},
+  {nameEn:"Faisal Saleem Qasim Al Zawawi", nameAr:"فيصل سليم قاسم الزواوي", titleEn:"Senior Specialist - Marketing", titleAr:"أخصائي أول - التسويق"},
+];
+
 const ICONS = {
   business_card: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="6" width="19" height="13" rx="2"/><circle cx="8" cy="11" r="1.6"/><path d="M5.2 16c.5-1.6 1.8-2.4 2.8-2.4s2.3.8 2.8 2.4"/><path d="M14 10h5M14 13.5h5"/></svg>',
   access_card: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="14" height="18" rx="2.4"/><circle cx="12" cy="9.4" r="2.2"/><path d="M8.3 15.4c.5-1.6 1.9-2.4 3.7-2.4s3.2.8 3.7 2.4"/><path d="M9 21v-1.4M15 21v-1.4"/></svg>',
@@ -399,11 +482,11 @@ const FORMS = {
     titleEn: "Business Card",
     desc: "تُستخدم هذه البيانات لطباعة بطاقة العمل وفق هوية أساس المؤسسية (الاسم والمسمى الوظيفي يظهران باللغتين).",
     fields: [
-      {id:"name_en", label:"الاسم الكامل", labelSub:"English", required:true, dir:"ltr", placeholder:"Ali Sulaiman Al Khalili"},
-      {id:"name_ar", label:"الاسم الكامل", labelSub:"بالعربية", required:true, dir:"rtl", placeholder:"علي بن سليمان الخليلي"},
+      {id:"name_en", label:"الاسم الكامل", labelSub:"English", required:true, dir:"ltr", placeholder:"Ali Sulaiman Al Khalili", autoComplete:"nameEn"},
+      {id:"name_ar", label:"الاسم الكامل", labelSub:"بالعربية", required:true, dir:"rtl", placeholder:"علي بن سليمان الخليلي", autoComplete:"nameAr"},
       {id:"title_en", label:"المسمى الوظيفي", labelSub:"English", required:true, dir:"ltr", placeholder:"Corporate Communication and Marketing Manager"},
       {id:"title_ar", label:"المسمى الوظيفي", labelSub:"بالعربية", required:true, dir:"rtl", placeholder:"مدير التواصل المؤسسي والتسويق"},
-      {id:"department", label:"القسم / الإدارة", required:false, dir:"rtl"},
+      {id:"department", label:"القسم / الإدارة", required:false, dir:"rtl", select:true, options:DEPARTMENTS},
       {id:"phone", label:"الهاتف المكتبي", required:false, dir:"ltr", placeholder:"+968 2 439 9800", hint:"اتركه فارغاً لاستخدام الرقم العام"},
       {id:"mobile", label:"الهاتف المحمول", required:true, dir:"ltr", placeholder:"+968 9X XXX XXX"},
       {id:"email", label:"البريد الإلكتروني", required:true, dir:"ltr", type:"email", placeholder:"name@asaas.om"},
@@ -417,11 +500,11 @@ const FORMS = {
     titleEn: "Access Card",
     desc: "لطلب بطاقة دخول جديدة، أو بدل فاقد، أو بطاقة تالفة.",
     fields: [
-      {id:"name_en", label:"الاسم الكامل", labelSub:"English", required:true, dir:"ltr", placeholder:"Ali Sulaiman Al Khalili"},
-      {id:"name_ar", label:"الاسم الكامل", labelSub:"بالعربية", required:true, dir:"rtl", placeholder:"علي بن سليمان الخليلي"},
+      {id:"name_en", label:"الاسم الكامل", labelSub:"English", required:true, dir:"ltr", placeholder:"Ali Sulaiman Al Khalili", autoComplete:"nameEn"},
+      {id:"name_ar", label:"الاسم الكامل", labelSub:"بالعربية", required:true, dir:"rtl", placeholder:"علي بن سليمان الخليلي", autoComplete:"nameAr"},
       {id:"title_en", label:"المسمى الوظيفي", labelSub:"English", required:true, dir:"ltr", placeholder:"Corporate Communication and Marketing Manager"},
       {id:"title_ar", label:"المسمى الوظيفي", labelSub:"بالعربية", required:true, dir:"rtl", placeholder:"مدير التواصل المؤسسي والتسويق"},
-      {id:"department", label:"القسم / الإدارة", required:true, dir:"rtl"},
+      {id:"department", label:"القسم / الإدارة", required:true, dir:"rtl", select:true, options:DEPARTMENTS},
       {id:"employee_id", label:"الرقم الوظيفي", required:false, dir:"ltr"},
       {id:"request_type", label:"نوع الطلب", required:true, dir:"rtl", select:true, options:[
         "بطاقة جديدة (موظف جديد)","بدل بطاقة مفقودة","بطاقة تالفة","تحديث بيانات البطاقة","أخرى"
@@ -437,11 +520,11 @@ const FORMS = {
     titleEn: "Email Signature",
     desc: "لإنشاء توقيع بريد إلكتروني رسمي وفق هوية أساس المؤسسية.",
     fields: [
-      {id:"name_en", label:"الاسم الكامل", labelSub:"English", required:true, dir:"ltr", placeholder:"Ali Sulaiman Al Khalili"},
-      {id:"name_ar", label:"الاسم الكامل", labelSub:"بالعربية", required:true, dir:"rtl", placeholder:"علي بن سليمان الخليلي"},
+      {id:"name_en", label:"الاسم الكامل", labelSub:"English", required:true, dir:"ltr", placeholder:"Ali Sulaiman Al Khalili", autoComplete:"nameEn"},
+      {id:"name_ar", label:"الاسم الكامل", labelSub:"بالعربية", required:true, dir:"rtl", placeholder:"علي بن سليمان الخليلي", autoComplete:"nameAr"},
       {id:"title_en", label:"المسمى الوظيفي", labelSub:"English", required:true, dir:"ltr", placeholder:"Corporate Communication and Marketing Manager"},
       {id:"title_ar", label:"المسمى الوظيفي", labelSub:"بالعربية", required:true, dir:"rtl", placeholder:"مدير التواصل المؤسسي والتسويق"},
-      {id:"department", label:"القسم / الإدارة", required:false, dir:"rtl"},
+      {id:"department", label:"القسم / الإدارة", required:false, dir:"rtl", select:true, options:DEPARTMENTS},
       {id:"phone", label:"الهاتف المكتبي / التحويلة", required:false, dir:"ltr"},
       {id:"mobile", label:"الهاتف المحمول", required:true, dir:"ltr"},
       {id:"email", label:"البريد الإلكتروني", required:true, dir:"ltr", type:"email"},
@@ -453,8 +536,8 @@ const FORMS = {
     titleEn: "Other Request",
     desc: "لأي طلب آخر متعلق بالهوية المؤسسية لا يندرج تحت الأقسام السابقة.",
     fields: [
-      {id:"name", label:"الاسم الكامل", required:true, dir:"rtl"},
-      {id:"department", label:"القسم / الإدارة", required:false, dir:"rtl"},
+      {id:"name", label:"الاسم الكامل", required:true, dir:"rtl", autoComplete:"nameAr"},
+      {id:"department", label:"القسم / الإدارة", required:false, dir:"rtl", select:true, options:DEPARTMENTS},
       {id:"mobile", label:"الهاتف المحمول", required:false, dir:"ltr"},
       {id:"email", label:"البريد الإلكتروني", required:true, dir:"ltr", type:"email"},
       {id:"subject", label:"موضوع الطلب", required:true, dir:"rtl", placeholder:"مثال: تصميم رول أب، طلب ملف الشعار، إلخ"},
@@ -551,7 +634,10 @@ function renderForm(){
     } else if(f.textarea){
       control = `<textarea id="${f.id}" dir="${f.dir}" placeholder="${f.placeholder||""}" ${f.required ? "required":""}></textarea>`;
     } else {
-      control = `<input id="${f.id}" type="${f.type||"text"}" dir="${f.dir}" placeholder="${f.placeholder||""}" value="${f.value||""}" ${f.required ? "required":""}>`;
+      control = `<input id="${f.id}" type="${f.type||"text"}" dir="${f.dir}" placeholder="${f.placeholder||""}" value="${f.value||""}" autocomplete="off" ${f.required ? "required":""}>`;
+    }
+    if(f.autoComplete){
+      control = `<div class="autocomplete-wrap">${control}<div class="autocomplete-panel" id="${f.id}_panel" hidden></div></div>`;
     }
     fieldsHtml += `<div class="field ${f.full ? "full":""}">
       <label for="${f.id}">${f.label}${subLabel}${reqStar}</label>
@@ -575,7 +661,96 @@ function renderForm(){
     </form>
   `;
   document.getElementById("requestForm").addEventListener("submit", onSubmit);
+
+  fields.filter(f => f.autoComplete).forEach(f => {
+    setupAutocomplete(document.getElementById(f.id), f.autoComplete);
+  });
 }
+
+/* ---------- name autocomplete (matches against EMPLOYEES, fills bilingual fields on select) ---------- */
+function setupAutocomplete(input, mode){
+  if(!input) return;
+  const panel = document.getElementById(input.id + "_panel");
+  if(!panel) return;
+  let activeIndex = -1;
+  let matches = [];
+
+  function close(){
+    panel.hidden = true;
+    panel.innerHTML = "";
+    activeIndex = -1;
+  }
+
+  function pickEmployee(emp){
+    const fillMap = {
+      name_en: emp.nameEn,
+      name_ar: emp.nameAr,
+      name: emp.nameAr,
+      title_en: emp.titleEn,
+      title_ar: emp.titleAr,
+    };
+    Object.keys(fillMap).forEach(id => {
+      const el = document.getElementById(id);
+      if(el) el.value = fillMap[id];
+    });
+    close();
+  }
+
+  function render(){
+    if(!matches.length){ close(); return; }
+    panel.innerHTML = matches.map((emp, i) => {
+      const primary   = mode === "nameEn" ? emp.nameEn  : emp.nameAr;
+      const secondary = mode === "nameEn" ? emp.nameAr  : emp.nameEn;
+      const titleLine = mode === "nameEn" ? emp.titleEn : emp.titleAr;
+      const dirAttr   = mode === "nameEn" ? 'dir="ltr"' : 'dir="rtl"';
+      return `<div class="autocomplete-item ${i === activeIndex ? "active":""}" data-idx="${i}" ${dirAttr}>
+        <div class="ac-primary">${escapeHtml(primary)}</div>
+        <div class="ac-secondary">${escapeHtml(secondary)} · ${escapeHtml(titleLine)}</div>
+      </div>`;
+    }).join("");
+    panel.hidden = false;
+    panel.querySelectorAll(".autocomplete-item").forEach(el => {
+      // mousedown (not click) — fires before the input loses focus, so the blur handler doesn't hide the panel first
+      el.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        pickEmployee(matches[Number(el.dataset.idx)]);
+      });
+    });
+  }
+
+  input.addEventListener("input", () => {
+    const q = input.value.trim().toLowerCase();
+    if(q.length < 2){ close(); return; }
+    matches = EMPLOYEES.filter(emp => {
+      const target = (mode === "nameEn" ? emp.nameEn : emp.nameAr).toLowerCase();
+      return target.includes(q);
+    }).slice(0, 8);
+    activeIndex = -1;
+    render();
+  });
+
+  input.addEventListener("keydown", (e) => {
+    if(panel.hidden) return;
+    if(e.key === "ArrowDown"){
+      e.preventDefault();
+      activeIndex = Math.min(activeIndex + 1, matches.length - 1);
+      render();
+    } else if(e.key === "ArrowUp"){
+      e.preventDefault();
+      activeIndex = Math.max(activeIndex - 1, 0);
+      render();
+    } else if(e.key === "Enter" && activeIndex >= 0){
+      e.preventDefault();
+      pickEmployee(matches[activeIndex]);
+    } else if(e.key === "Escape"){
+      close();
+    }
+  });
+
+  input.addEventListener("blur", () => {
+    // small delay so a mousedown on an item still registers before we hide
+    setTimeout(close, 150);
+  });
 
 /* ---------- reference number (for the requester to quote in follow-ups) ---------- */
 function genReference(){
