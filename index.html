@@ -406,11 +406,37 @@ function compressImage(file, maxDim = 900, quality = 0.8){
   });
 }
 
-async function uploadPhoto(blob, reference, fieldId){
+async function uploadPhoto(blob, reference, fieldId, onProgress){
   const path = `request-photos/${reference}-${fieldId}.jpg`;
   const fileRef = storageApi.ref(storage, path);
-  await storageApi.uploadBytes(fileRef, blob, { contentType: "image/jpeg" });
-  return await storageApi.getDownloadURL(fileRef);
+  const task = storageApi.uploadBytesResumable(fileRef, blob, { contentType: "image/jpeg" });
+
+  return new Promise((resolve, reject)=>{
+    // مهلة قصوى 60 ثانية حتى لا يعلق الرفع إلى الأبد
+    const timeout = setTimeout(()=>{
+      try{ task.cancel(); }catch(_){}
+      reject(new Error("انتهت مهلة الرفع (60 ثانية). تحقّق من الاتصال أو من إعدادات Firebase Storage."));
+    }, 60000);
+
+    task.on("state_changed",
+      (snap)=>{
+        if(onProgress && snap.totalBytes){
+          onProgress(Math.round((snap.bytesTransferred / snap.totalBytes) * 100));
+        }
+      },
+      (err)=>{
+        clearTimeout(timeout);
+        reject(err);
+      },
+      async ()=>{
+        clearTimeout(timeout);
+        try{
+          const url = await storageApi.getDownloadURL(task.snapshot.ref);
+          resolve(url);
+        }catch(err){ reject(err); }
+      }
+    );
+  });
 }
 
 const STATUS_OPTIONS = ["جديد", "قيد التنفيذ", "مكتمل", "مرفوض / يحتاج تعديل"];
@@ -690,11 +716,23 @@ async function onSubmit(e){
   try{
     await initFirebase();
 
+    // تسجيل دخول مجهول قبل الرفع — يحلّ غالباً مشكلة قواعد Firebase Storage
+    // التي تتطلب request.auth != null. إن فشل، نتابع: قد تكون القواعد عامة.
+    if(fileFields.length && !auth.currentUser){
+      try{
+        await authApi.signInAnonymously(auth);
+      }catch(authErr){
+        console.warn("Anonymous sign-in failed:", authErr);
+      }
+    }
+
     for(const f of fileFields){
       submitBtn.textContent = "جارٍ رفع الصورة...";
       const el = document.getElementById(f.id);
       const compressed = await compressImage(el.files[0]);
-      data[f.id] = await uploadPhoto(compressed, reference, f.id);
+      data[f.id] = await uploadPhoto(compressed, reference, f.id, (pct)=>{
+        submitBtn.textContent = `جارٍ رفع الصورة... ${pct}%`;
+      });
     }
 
     submitBtn.textContent = "جارٍ الإرسال...";
@@ -705,7 +743,9 @@ async function onSubmit(e){
     console.error("Submission error:", err);
     submitBtn.disabled = false;
     submitBtn.textContent = "إرسال الطلب";
-    errorEl.textContent = "حدث خطأ أثناء إرسال الطلب. تحقّق من اتصالك بالإنترنت وحاول مرة أخرى.";
+    const codePart = err && err.code ? ` (${err.code})` : "";
+    const msgPart  = err && err.message ? ` — ${err.message}` : "";
+    errorEl.textContent = "تعذّر إرسال الطلب" + codePart + msgPart;
     errorEl.style.display = "block";
   }
 }
