@@ -361,22 +361,25 @@ function isFirebaseConfigured(){
    Users to whatever passcode you want the team to use. */
 const ADMIN_EMAIL = "asaasoman98@gmail.com";
 
-let app, db, auth;
+let app, db, auth, storage;
 let firestoreApi = null; // populated once the Firestore module is loaded
 let authApi = null;      // populated once the Auth module is loaded
+let storageApi = null;   // populated once the Storage module is loaded
 
 async function initFirebase(){
   if(!isFirebaseConfigured() || app) return;
   const { initializeApp } = await import("https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js");
   firestoreApi = await import("https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js");
   authApi = await import("https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js");
+  storageApi = await import("https://www.gstatic.com/firebasejs/12.15.0/firebase-storage.js");
   app = initializeApp(FIREBASE_CONFIG);
   db = firestoreApi.getFirestore(app);
   auth = authApi.getAuth(app);
+  storage = storageApi.getStorage(app);
 }
 
-/* ---------- photo helpers (resize client-side, then embed as base64 in Firestore document) ---------- */
-function compressImage(file, maxDim = 600, quality = 0.75){
+/* ---------- photo helpers (resize client-side, then upload to Firebase Storage) ---------- */
+function compressImage(file, maxDim = 900, quality = 0.8){
   return new Promise((resolve, reject)=>{
     const objectUrl = URL.createObjectURL(file);
     const img = new Image();
@@ -403,33 +406,37 @@ function compressImage(file, maxDim = 600, quality = 0.75){
   });
 }
 
-function blobToDataUrl(blob){
-  return new Promise((resolve, reject)=>{
-    const reader = new FileReader();
-    reader.onload = ()=>resolve(reader.result);
-    reader.onerror = ()=>reject(new Error("تعذّر قراءة الصورة"));
-    reader.readAsDataURL(blob);
-  });
-}
+async function uploadPhoto(blob, reference, fieldId, onProgress){
+  const path = `request-photos/${reference}-${fieldId}.jpg`;
+  const fileRef = storageApi.ref(storage, path);
+  const task = storageApi.uploadBytesResumable(fileRef, blob, { contentType: "image/jpeg" });
 
-/* Compress an image to a base64 data URL that fits comfortably under
-   the 1 MB Firestore document limit. If the first pass is too big, we
-   retry with smaller dimensions / lower quality. Returns the data URL. */
-async function imageToSafeDataUrl(file){
-  // Firestore doc limit is 1 MB; reserve ~150 KB for other fields & overhead.
-  const MAX_DATA_URL_BYTES = 850 * 1024;
-  const attempts = [
-    { maxDim: 600, quality: 0.75 },
-    { maxDim: 500, quality: 0.65 },
-    { maxDim: 420, quality: 0.55 },
-    { maxDim: 360, quality: 0.45 },
-  ];
-  for(const opts of attempts){
-    const blob = await compressImage(file, opts.maxDim, opts.quality);
-    const dataUrl = await blobToDataUrl(blob);
-    if(dataUrl.length <= MAX_DATA_URL_BYTES) return dataUrl;
-  }
-  throw new Error("الصورة كبيرة جداً بعد الضغط — جرّب صورة أصغر.");
+  return new Promise((resolve, reject)=>{
+    // مهلة قصوى 60 ثانية حتى لا يعلق الرفع إلى الأبد
+    const timeout = setTimeout(()=>{
+      try{ task.cancel(); }catch(_){}
+      reject(new Error("انتهت مهلة الرفع (60 ثانية). تحقّق من الاتصال أو من إعدادات Firebase Storage."));
+    }, 60000);
+
+    task.on("state_changed",
+      (snap)=>{
+        if(onProgress && snap.totalBytes){
+          onProgress(Math.round((snap.bytesTransferred / snap.totalBytes) * 100));
+        }
+      },
+      (err)=>{
+        clearTimeout(timeout);
+        reject(err);
+      },
+      async ()=>{
+        clearTimeout(timeout);
+        try{
+          const url = await storageApi.getDownloadURL(task.snapshot.ref);
+          resolve(url);
+        }catch(err){ reject(err); }
+      }
+    );
+  });
 }
 
 const STATUS_OPTIONS = ["جديد", "قيد التنفيذ", "مكتمل", "مرفوض / يحتاج تعديل"];
@@ -709,10 +716,23 @@ async function onSubmit(e){
   try{
     await initFirebase();
 
+    // تسجيل دخول مجهول قبل الرفع — يحلّ غالباً مشكلة قواعد Firebase Storage
+    // التي تتطلب request.auth != null. إن فشل، نتابع: قد تكون القواعد عامة.
+    if(fileFields.length && !auth.currentUser){
+      try{
+        await authApi.signInAnonymously(auth);
+      }catch(authErr){
+        console.warn("Anonymous sign-in failed:", authErr);
+      }
+    }
+
     for(const f of fileFields){
-      submitBtn.textContent = "جارٍ معالجة الصورة...";
+      submitBtn.textContent = "جارٍ رفع الصورة...";
       const el = document.getElementById(f.id);
-      data[f.id] = await imageToSafeDataUrl(el.files[0]);
+      const compressed = await compressImage(el.files[0]);
+      data[f.id] = await uploadPhoto(compressed, reference, f.id, (pct)=>{
+        submitBtn.textContent = `جارٍ رفع الصورة... ${pct}%`;
+      });
     }
 
     submitBtn.textContent = "جارٍ الإرسال...";
