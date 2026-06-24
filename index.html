@@ -203,6 +203,17 @@ input,textarea,select,button{font-family:inherit;}
 .modal-box p{margin:0 0 14px; font-size:13.5px; color:var(--ink-soft); line-height:1.7;}
 .modal-actions{display:flex; gap:10px; margin-top:16px; justify-content:flex-end;}
 
+/* ---------- password visibility toggle ---------- */
+.password-wrap{position:relative;}
+.password-wrap input{padding-right:38px;}
+.toggle-pw-btn{
+  position:absolute; top:50%; transform:translateY(-50%); right:6px;
+  background:none; border:none; cursor:pointer; padding:5px;
+  color:var(--ink-soft); display:flex; align-items:center; justify-content:center;
+}
+.toggle-pw-btn svg{width:18px; height:18px;}
+.toggle-pw-btn:hover{color:var(--blue);}
+
 /* ---------- admin dashboard ---------- */
 .dash-bar{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:16px; flex-wrap:wrap;}
 .dash-bar h2{margin:0;}
@@ -284,7 +295,12 @@ tbody tr:last-child td{border-bottom:none;}
     <h3>دخول لوحة التحكم</h3>
     <p>أدخل كلمة المرور الخاصة بفريق التواصل المؤسسي والتسويق.</p>
     <div class="field">
-      <input type="password" id="loginPassword" placeholder="كلمة المرور" dir="ltr">
+      <div class="password-wrap">
+        <input type="password" id="loginPassword" placeholder="كلمة المرور" dir="ltr">
+        <button type="button" id="togglePassword" class="toggle-pw-btn" aria-label="عرض كلمة المرور">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+      </div>
     </div>
     <p class="error-msg" id="loginError" style="display:none;"></p>
     <div class="modal-actions">
@@ -635,6 +651,16 @@ const loginPassword = document.getElementById("loginPassword");
 const loginError = document.getElementById("loginError");
 let currentUser = null;
 
+const EYE_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/><circle cx="12" cy="12" r="3"/></svg>';
+const EYE_OFF_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l18 18"/><path d="M10.6 10.6a3 3 0 0 0 4.24 4.24"/><path d="M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 7 11 7a13.16 13.16 0 0 1-1.67 2.68M6.61 6.61C3.6 8.6 1 12 1 12a13 13 0 0 0 4.16 4.39M14.12 14.12 9.88 9.88"/></svg>';
+const togglePasswordBtn = document.getElementById("togglePassword");
+togglePasswordBtn.addEventListener("click", ()=>{
+  const showing = loginPassword.type === "text";
+  loginPassword.type = showing ? "password" : "text";
+  togglePasswordBtn.innerHTML = showing ? EYE_ICON : EYE_OFF_ICON;
+  togglePasswordBtn.setAttribute("aria-label", showing ? "عرض كلمة المرور" : "إخفاء كلمة المرور");
+});
+
 document.getElementById("adminLinkBtn").addEventListener("click", async ()=>{
   if(!isFirebaseConfigured()){
     showToast("لم يتم ربط هذا الموقع بـ Firebase بعد. راجع README.md.");
@@ -646,6 +672,8 @@ document.getElementById("adminLinkBtn").addEventListener("click", async ()=>{
     return;
   }
   loginPassword.value = "";
+  loginPassword.type = "password";
+  togglePasswordBtn.innerHTML = EYE_ICON;
   loginError.style.display = "none";
   loginOverlay.hidden = false;
   loginPassword.focus();
@@ -923,7 +951,7 @@ async function setFieldOverride(typeKey, fieldId, patch){
     renderFieldManager();
   }catch(err){
     console.error("Firestore config write error:", err);
-    showToast("تعذّر الحفظ، حاول مرة أخرى.");
+    showToast("تعذّر الحفظ" + (err.code ? " (" + err.code + ")" : "") + ". تأكد من تحديث قواعد Firestore لمجموعة config — راجع README.md.");
   }
 }
 
@@ -968,7 +996,8 @@ async function saveContent(){
     showToast("تم حفظ المحتوى.");
   }catch(err){
     console.error("Firestore content write error:", err);
-    document.getElementById("contentError").textContent = "تعذّر الحفظ، حاول مرة أخرى.";
+    const codeNote = err.code ? " (" + err.code + ")" : "";
+    document.getElementById("contentError").textContent = "تعذّر الحفظ" + codeNote + ". تأكد من تحديث قواعد Firestore لمجموعة config — راجع README.md.";
     document.getElementById("contentError").style.display = "block";
   }
 }
